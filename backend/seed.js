@@ -42,6 +42,36 @@ const sampleVideos = [
     subject: "Computer Science",
     instructor: "Prof. Ian Cole",
   },
+  {
+    title: "Balancing Chemical Equations",
+    description:
+      "A step-by-step method for balancing chemical equations, with worked examples covering combustion and synthesis reactions.",
+    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    thumbnail: "https://images.unsplash.com/photo-1554475900-0a0350e3fc7b?w=600",
+    duration: 300,
+    subject: "Chemistry",
+    instructor: "Dr. Priya Menon",
+  },
+  {
+    title: "The French Revolution: Causes and Consequences",
+    description:
+      "An overview of the social, economic, and political pressures that led to the French Revolution, and its lasting impact on modern democracy.",
+    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4",
+    thumbnail: "https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=600",
+    duration: 360,
+    subject: "History",
+    instructor: "Prof. Daniel Whitfield",
+  },
+  {
+    title: "Big O Notation Explained",
+    description:
+      "How to reason about algorithm efficiency using Big O notation, with examples ranging from O(1) to O(n^2).",
+    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    thumbnail: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=600",
+    duration: 420,
+    subject: "Computer Science",
+    instructor: "Prof. Ian Cole",
+  },
 ];
 
 (async () => {
