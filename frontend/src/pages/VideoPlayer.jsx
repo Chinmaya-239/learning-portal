@@ -7,10 +7,26 @@ import ProgressRail from "../components/ProgressRail";
 import BookmarkPanel from "../components/BookmarkPanel";
 import { useAuth } from "../context/AuthContext";
 
+function loadYouTubeAPI() {
+  return new Promise((resolve) => {
+    if (window.YT && window.YT.Player) {
+      resolve(window.YT);
+      return;
+    }
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+  });
+}
+
 export default function VideoPlayer() {
   const { id } = useParams();
   const { user } = useAuth();
-  const videoRef = useRef(null);
+  const playerContainerRef = useRef(null);
+  const playerRef = useRef(null);
+  const pollRef = useRef(null);
+  const pendingResumeRef = useRef(0);
 
   const [video, setVideo] = useState(null);
   const [bookmarks, setBookmarks] = useState([]);
@@ -18,13 +34,14 @@ export default function VideoPlayer() {
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [resumeApplied, setResumeApplied] = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
 
   const saveTimer = useRef(null);
 
+  // Fetch video/bookmarks/progress
   useEffect(() => {
     setLoading(true);
-    setResumeApplied(false);
+    setPlayerReady(false);
     (async () => {
       const [videoRes, bookmarksRes, progressRes] = await Promise.all([
         api.get(`/videos/${id}`),
@@ -33,15 +50,58 @@ export default function VideoPlayer() {
       ]);
       setVideo(videoRes.data.video);
       setBookmarks(bookmarksRes.data.bookmarks);
-
-      const resumeAt = progressRes.data.progress?.lastPosition || 0;
-      if (videoRef.current && resumeAt > 0) {
-        videoRef.current.currentTime = resumeAt;
-      }
-      setResumeApplied(true);
+      pendingResumeRef.current = progressRes.data.progress?.lastPosition || 0;
       setLoading(false);
     })();
   }, [id]);
+
+  // Create the YouTube player once video data is loaded
+  useEffect(() => {
+    if (!video || !playerContainerRef.current) return;
+    let cancelled = false;
+
+    loadYouTubeAPI().then((YT) => {
+      if (cancelled || !playerContainerRef.current) return;
+
+      playerRef.current = new YT.Player(playerContainerRef.current, {
+        videoId: video.youtubeId,
+        playerVars: { modestbranding: 1, rel: 0 },
+        events: {
+          onReady: (e) => {
+            const d = e.target.getDuration();
+            setDuration(d);
+            if (pendingResumeRef.current > 0) {
+              e.target.seekTo(pendingResumeRef.current, true);
+            }
+            setPlayerReady(true);
+          },
+          onStateChange: (e) => {
+            if (e.data === window.YT.PlayerState.PLAYING) {
+              setPlaying(true);
+              clearInterval(pollRef.current);
+              pollRef.current = setInterval(() => {
+                if (playerRef.current?.getCurrentTime) {
+                  const t = playerRef.current.getCurrentTime();
+                  setCurrentTime(t);
+                  persistProgress(t);
+                }
+              }, 500);
+            } else {
+              setPlaying(false);
+              clearInterval(pollRef.current);
+            }
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollRef.current);
+      playerRef.current?.destroy?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video]);
 
   const persistProgress = useCallback(
     (time) => {
@@ -50,7 +110,7 @@ export default function VideoPlayer() {
         api
           .put(`/progress/${id}`, {
             lastPosition: Math.floor(time),
-            duration: videoRef.current?.duration || duration,
+            duration: playerRef.current?.getDuration?.() || duration,
           })
           .catch(() => {});
       }, 800);
@@ -58,21 +118,10 @@ export default function VideoPlayer() {
     [id, duration]
   );
 
-  const handleTimeUpdate = () => {
-    const t = videoRef.current.currentTime;
-    setCurrentTime(t);
-    persistProgress(t);
-  };
-
-  const handleLoadedMetadata = () => {
-    setDuration(videoRef.current.duration || 0);
-  };
-
   const seekTo = (seconds) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = seconds;
-      videoRef.current.play();
-      setPlaying(true);
+    if (playerRef.current) {
+      playerRef.current.seekTo(seconds, true);
+      playerRef.current.playVideo();
     }
   };
 
@@ -94,13 +143,12 @@ export default function VideoPlayer() {
   };
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.play();
-      setPlaying(true);
+    if (!playerRef.current) return;
+    const state = playerRef.current.getPlayerState();
+    if (state === window.YT.PlayerState.PLAYING) {
+      playerRef.current.pauseVideo();
     } else {
-      videoRef.current.pause();
-      setPlaying(false);
+      playerRef.current.playVideo();
     }
   };
 
@@ -127,28 +175,20 @@ export default function VideoPlayer() {
               <ScreenshotGuard
                 watermarkText={`${user?.name} · ${user?.email} · ${new Date().toLocaleString()}`}
               >
-                <video
-                  ref={videoRef}
-                  src={video.url}
-                  className="w-full aspect-video bg-black"
-                  onTimeUpdate={handleTimeUpdate}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
-                  onClick={togglePlay}
-                  controlsList="nodownload noremoteplayback"
-                  disablePictureInPicture
-                  onContextMenu={(e) => e.preventDefault()}
-                />
+                <div className="relative w-full pt-[56.25%] bg-black">
+                  <div ref={playerContainerRef} className="absolute inset-0 w-full h-full" />
+                </div>
               </ScreenshotGuard>
 
               <div className="bg-ink-dark px-4 pb-3">
-                <ProgressRail
-                  duration={duration}
-                  currentTime={currentTime}
-                  bookmarks={bookmarks}
-                  onSeek={seekTo}
-                />
+                {playerReady && (
+                  <ProgressRail
+                    duration={duration}
+                    currentTime={currentTime}
+                    bookmarks={bookmarks}
+                    onSeek={seekTo}
+                  />
+                )}
                 <div className="flex items-center gap-3 pb-2">
                   <button
                     onClick={togglePlay}
@@ -165,7 +205,7 @@ export default function VideoPlayer() {
 
             <div className="mt-5">
               <h1 className="font-display text-2xl text-paper">{video.title}</h1>
-              <p className="text-paper/70 text-sm mt-2 max-w-2xl">{video.description}</p>
+             <p className="text-paper/70 text-sm mt-2 max-w-2xl">{video.description}</p>
             </div>
           </div>
 
