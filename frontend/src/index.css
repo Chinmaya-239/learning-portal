@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  background-color: #14213D;
+  color: #2B2D42;
+}
+
+/* Bookmark tab marker on the video progress rail (the page's signature element) */
+.tab-marker {
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
+}
+
+/* Screenshot / capture deterrence utility classes */
+.protect-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.protected-blur {
+  filter: blur(24px) brightness(0.4);
+  transition: filter 0.15s ease;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body::before {
+    content: "This content is protected and cannot be printed.";
+    display: block;
+    text-align: center;
+    padding: 4rem;
+    font-family: "Inter", sans-serif;
+    font-size: 1.2rem;
+  }
+}
